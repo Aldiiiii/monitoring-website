@@ -4,10 +4,6 @@ import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-
 
 export class ListMonitorsDto {
   @IsOptional()
-  @IsString()
-  userId?: string;
-
-  @IsOptional()
   @IsEnum(MonitorType)
   type?: MonitorType;
 

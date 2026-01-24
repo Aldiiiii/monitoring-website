@@ -7,9 +7,10 @@ import { ListIncidentsDto } from './dto/list-incidents.dto';
 export class IncidentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: ListIncidentsDto): Promise<Incident[]> {
+  async findAll(userId: string, query: ListIncidentsDto): Promise<Incident[]> {
     const where: Prisma.IncidentWhereInput = {
       monitorId: query.monitorId,
+      monitor: { userId },
       startedAt:
         query.from || query.to
           ? {
@@ -27,8 +28,10 @@ export class IncidentsService {
     });
   }
 
-  async findOne(id: string): Promise<Incident> {
-    const incident = await this.prisma.incident.findUnique({ where: { id } });
+  async findOne(userId: string, id: string): Promise<Incident> {
+    const incident = await this.prisma.incident.findFirst({
+      where: { id, monitor: { userId } },
+    });
     if (!incident) {
       throw new NotFoundException('Incident not found.');
     }

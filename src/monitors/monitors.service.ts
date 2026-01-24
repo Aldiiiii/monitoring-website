@@ -10,11 +10,11 @@ import { UpdateMonitorDto } from './dto/update-monitor.dto';
 export class MonitorsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateMonitorDto): Promise<Monitor> {
+  async create(userId: string, dto: CreateMonitorDto): Promise<Monitor> {
     try {
       return await this.prisma.monitor.create({
         data: {
-          userId: dto.userId,
+          userId,
           name: dto.name,
           type: dto.type,
           url: dto.url ?? null,
@@ -31,13 +31,14 @@ export class MonitorsService {
         },
       });
     } catch (error) {
+      // Normalize Prisma errors to HTTP exceptions.
       handlePrismaError(error);
     }
   }
 
-  async findAll(query: ListMonitorsDto): Promise<Monitor[]> {
+  async findAll(userId: string, query: ListMonitorsDto): Promise<Monitor[]> {
     const where: Prisma.MonitorWhereInput = {
-      userId: query.userId,
+      userId,
       type: query.type,
       isActive: query.isActive,
     };
@@ -50,8 +51,10 @@ export class MonitorsService {
     });
   }
 
-  async findOne(id: string): Promise<Monitor> {
-    const monitor = await this.prisma.monitor.findUnique({ where: { id } });
+  async findOne(userId: string, id: string): Promise<Monitor> {
+    const monitor = await this.prisma.monitor.findFirst({
+      where: { id, userId },
+    });
     if (!monitor) {
       throw new NotFoundException('Monitor not found.');
     }
@@ -59,8 +62,20 @@ export class MonitorsService {
     return monitor;
   }
 
-  async update(id: string, dto: UpdateMonitorDto): Promise<Monitor> {
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateMonitorDto,
+  ): Promise<Monitor> {
     try {
+      const exists = await this.prisma.monitor.findFirst({
+        where: { id, userId },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException('Monitor not found.');
+      }
+
       return await this.prisma.monitor.update({
         where: { id },
         data: {
@@ -80,14 +95,23 @@ export class MonitorsService {
         },
       });
     } catch (error) {
+      // Normalize Prisma errors to HTTP exceptions.
       handlePrismaError(error);
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     try {
+      const exists = await this.prisma.monitor.findFirst({
+        where: { id, userId },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new NotFoundException('Monitor not found.');
+      }
       await this.prisma.monitor.delete({ where: { id } });
     } catch (error) {
+      // Normalize Prisma errors to HTTP exceptions.
       handlePrismaError(error);
     }
   }
