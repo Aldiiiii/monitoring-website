@@ -1,0 +1,159 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MonitorType {
+  HTTP
+  TCP
+}
+
+enum MonitorStatus {
+  UP
+  DOWN
+  UNKNOWN
+}
+
+enum CheckStatus {
+  UP
+  DOWN
+}
+
+enum ChannelType {
+  TELEGRAM
+  EMAIL
+  WEBHOOK
+}
+
+model User {
+  id        String    @id @default(cuid())
+  name      String
+  email     String    @unique
+  password  String
+  isActive  Boolean   @default(true)
+
+  monitors  Monitor[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
+model Monitor {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  type        MonitorType
+  url         String?       // untuk HTTP/HTTPS
+  host        String?       // untuk TCP (atau HTTP juga boleh kalau mau)
+  port        Int?          // untuk TCP
+  method      String?       // GET/HEAD (khusus HTTP), optional
+  keyword     String?       // optional: cek mengandung teks tertentu
+  expectCode  Int?          // optional: mis. 200
+
+  intervalSec Int           @default(60)   // 60 = 1 menit
+  timeoutMs   Int           @default(8000) // 8 detik
+  retries     Int           @default(2)    // false alarm reduction
+  retryDelayMs Int          @default(500)  // jeda antar retry
+
+  isActive    Boolean       @default(true)
+
+  lastStatus  MonitorStatus @default(UNKNOWN)
+  lastCheckedAt DateTime?
+  lastLatencyMs Int?
+
+  // Relations
+  checks      Check[]
+  incidents   Incident[]
+  maintenances MaintenanceWindow[]
+  channels    NotificationChannel[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([type])
+}
+
+model Check {
+  id          String      @id @default(cuid())
+  monitorId   String
+  monitor     Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  status      CheckStatus
+  latencyMs   Int?        // null kalau gagal connect total
+  statusCode  Int?        // HTTP status code
+  error       String?     // ringkas: timeout / dns / refused
+  checkedAt   DateTime    @default(now())
+
+  @@index([monitorId, checkedAt])
+  @@index([checkedAt])
+}
+
+model Incident {
+  id          String    @id @default(cuid())
+  monitorId   String
+  monitor     Monitor   @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationSec Int?      // bisa diisi saat endedAt ada
+  reason      String?   // optional: timeout/dns/etc
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([monitorId, startedAt])
+  @@index([endedAt])
+}
+
+model MaintenanceWindow {
+  id        String   @id @default(cuid())
+  monitorId String
+  monitor   Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  startAt   DateTime
+  endAt     DateTime
+
+  // versi awal: sekali jalan.
+  // nanti bisa ditambah recurring rule (RRULE) kalau perlu.
+  note      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([monitorId, startAt, endAt])
+}
+
+model NotificationChannel {
+  id          String      @id @default(cuid())
+  monitorId   String
+  monitor     Monitor     @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  type        ChannelType
+  isEnabled   Boolean     @default(true)
+
+  // TELEGRAM fields
+  telegramChatId String?
+  telegramThreadId Int?   // optional untuk forum topic
+  telegramBotToken String? // kalau mau per-monitor token (opsional)
+  // Jika token global, simpan di ENV, field ini bisa diabaikan.
+
+  // EMAIL/WEBHOOK nanti bisa ditambah fields-nya
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([monitorId])
+  @@index([type])
+  @@index([isEnabled])
+}
