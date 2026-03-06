@@ -22,6 +22,13 @@ export type MonitorInput = {
   host?: string;
   port?: number;
   isActive?: boolean;
+  method?: string;
+  keyword?: string;
+  expectCode?: number;
+  intervalSec?: number;
+  timeoutMs?: number;
+  retries?: number;
+  retryDelayMs?: number;
 };
 
 export type MaintenanceWindow = {
@@ -107,6 +114,12 @@ export type User = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  role: UserRole;
 };
 
 export type UpdateUserInput = {
@@ -264,4 +277,12 @@ export function createUser(payload: CreateUserInput): Promise<User> {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+export async function fetchMe(): Promise<AuthUser | null> {
+  try {
+    return await request<AuthUser>('/auth/me');
+  } catch {
+    return null;
+  }
 }

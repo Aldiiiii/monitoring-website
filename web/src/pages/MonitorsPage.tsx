@@ -30,6 +30,7 @@ import {
 } from '../lib/api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import UptimeChart from '../components/UptimeChart';
+import { useAuth } from '../lib/useAuth';
 
 const emptyForm: MonitorInput = {
   name: '',
@@ -38,10 +39,19 @@ const emptyForm: MonitorInput = {
   host: '',
   port: undefined,
   isActive: true,
+  method: 'GET',
+  keyword: '',
+  expectCode: undefined,
+  intervalSec: 60,
+  timeoutMs: 8000,
+  retries: 2,
+  retryDelayMs: 500,
 };
 
 export default function MonitorsPage() {
   const queryClient = useQueryClient();
+  const { data: user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [showForm, setShowForm] = useState(false);
   const [showMaintenance, setShowMaintenance] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
@@ -251,6 +261,13 @@ export default function MonitorsPage() {
       host: monitor.host ?? '',
       port: monitor.port ?? undefined,
       isActive: monitor.isActive,
+      method: monitor.method ?? 'GET',
+      keyword: monitor.keyword ?? '',
+      expectCode: monitor.expectCode ?? undefined,
+      intervalSec: monitor.intervalSec ?? 60,
+      timeoutMs: monitor.timeoutMs ?? 8000,
+      retries: monitor.retries ?? 2,
+      retryDelayMs: monitor.retryDelayMs ?? 500,
     });
     setShowForm(true);
   };
@@ -374,9 +391,11 @@ export default function MonitorsPage() {
       </header>
 
       <div className="toolbar">
-        <button className="button" onClick={openCreate}>
-          Add Monitor
-        </button>
+        {isAdmin && (
+          <button className="button" onClick={openCreate}>
+            Add Monitor
+          </button>
+        )}
         <button
           className="button secondary"
           onClick={() => queryClient.invalidateQueries({ queryKey: ['monitors'] })}
@@ -431,34 +450,42 @@ export default function MonitorsPage() {
                   <td>{monitor.lastLatencyMs ? `${monitor.lastLatencyMs} ms` : '-'}</td>
                   <td>
                     <div className="toolbar">
-                      <button className="button ghost" onClick={() => openEdit(monitor)}>
-                        Edit
-                      </button>
-                      <button
-                        className="button ghost"
-                        onClick={() => openMaintenance(monitor)}
-                      >
-                        Maintenance
-                      </button>
-                      <button className="button ghost" onClick={() => openChannels(monitor)}>
-                        Channels
-                      </button>
+                      {isAdmin && (
+                        <button className="button ghost" onClick={() => openEdit(monitor)}>
+                          Edit
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          className="button ghost"
+                          onClick={() => openMaintenance(monitor)}
+                        >
+                          Maintenance
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button className="button ghost" onClick={() => openChannels(monitor)}>
+                          Channels
+                        </button>
+                      )}
                       <button className="button ghost" onClick={() => openReport(monitor)}>
                         Report
                       </button>
                       <button className="button ghost" onClick={() => openHistory(monitor)}>
                         History
                       </button>
-                      <button
-                        className="button secondary"
-                        onClick={() => {
-                          if (confirm('Delete this monitor?')) {
-                            deleteMutation.mutate(monitor.id);
-                          }
-                        }}
-                      >
-                        Delete
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className="button secondary"
+                          onClick={() => {
+                            if (confirm('Delete this monitor?')) {
+                              deleteMutation.mutate(monitor.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -468,7 +495,7 @@ export default function MonitorsPage() {
         )}
       </section>
 
-      {showForm && (
+      {showForm && isAdmin && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <h2>{editing ? 'Edit Monitor' : 'Add Monitor'}</h2>
@@ -538,6 +565,110 @@ export default function MonitorsPage() {
                     </label>
                   </>
                 )}
+                {form.type === 'HTTP' && (
+                  <>
+                    <label>
+                      Method
+                      <select
+                        value={form.method ?? 'GET'}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, method: event.target.value }))
+                        }
+                      >
+                        <option value="GET">GET</option>
+                        <option value="HEAD">HEAD</option>
+                      </select>
+                    </label>
+                    <label>
+                      Expect Code (optional)
+                      <input
+                        type="number"
+                        value={form.expectCode ?? ''}
+                        onChange={(event) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            expectCode: event.target.value
+                              ? Number(event.target.value)
+                              : undefined,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Keyword (optional)
+                      <input
+                        value={form.keyword ?? ''}
+                        onChange={(event) =>
+                          setForm((prev) => ({ ...prev, keyword: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </>
+                )}
+                <label>
+                  Interval (sec)
+                  <input
+                    type="number"
+                    value={form.intervalSec ?? ''}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        intervalSec: event.target.value
+                          ? Number(event.target.value)
+                          : undefined,
+                      }))
+                    }
+                    min={30}
+                  />
+                </label>
+                <label>
+                  Timeout (ms)
+                  <input
+                    type="number"
+                    value={form.timeoutMs ?? ''}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        timeoutMs: event.target.value
+                          ? Number(event.target.value)
+                          : undefined,
+                      }))
+                    }
+                    min={1000}
+                  />
+                </label>
+                <label>
+                  Retries (optional)
+                  <input
+                    type="number"
+                    value={form.retries ?? ''}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        retries: event.target.value
+                          ? Number(event.target.value)
+                          : undefined,
+                      }))
+                    }
+                    min={0}
+                  />
+                </label>
+                <label>
+                  Retry Delay (ms) (optional)
+                  <input
+                    type="number"
+                    value={form.retryDelayMs ?? ''}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        retryDelayMs: event.target.value
+                          ? Number(event.target.value)
+                          : undefined,
+                      }))
+                    }
+                    min={0}
+                  />
+                </label>
                 <label>
                   Active
                   <select
@@ -571,7 +702,7 @@ export default function MonitorsPage() {
         </div>
       )}
 
-      {showMaintenance && maintenanceFor && (
+      {showMaintenance && maintenanceFor && isAdmin && (
         <div className="modal-backdrop" onClick={() => setShowMaintenance(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <h2>Maintenance: {maintenanceFor.name}</h2>
@@ -713,12 +844,55 @@ export default function MonitorsPage() {
         </div>
       )}
 
-      {showChannels && channelsFor && (
+      {showChannels && channelsFor && isAdmin && (
         <div className="modal-backdrop" onClick={() => setShowChannels(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <h2>Channels: {channelsFor.name}</h2>
             <form onSubmit={handleChannelSubmit}>
               <div className="form-grid">
+                <label>
+                  Existing Channels
+                  <select
+                    value={editingChannel?.id ?? ''}
+                    onChange={(event) => {
+                      const selectedId = event.target.value;
+                      if (!selectedId) {
+                        setEditingChannel(null);
+                        setChannelForm({
+                          monitorId: channelsFor.id,
+                          type: 'TELEGRAM',
+                          isEnabled: true,
+                          telegramChatId: '',
+                          telegramThreadId: undefined,
+                          telegramBotToken: '',
+                        });
+                        return;
+                      }
+                      const selected = (channelsQuery.data ?? []).find(
+                        (channel) => channel.id === selectedId,
+                      );
+                      if (!selected) {
+                        return;
+                      }
+                      setEditingChannel(selected);
+                      setChannelForm({
+                        monitorId: selected.monitorId,
+                        type: selected.type,
+                        isEnabled: selected.isEnabled,
+                        telegramChatId: selected.telegramChatId ?? '',
+                        telegramThreadId: selected.telegramThreadId ?? undefined,
+                        telegramBotToken: selected.telegramBotToken ?? '',
+                      });
+                    }}
+                  >
+                    <option value="">New Channel</option>
+                    {(channelsQuery.data ?? []).map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.type} - {channel.telegramChatId ?? 'no-chat'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label>
                   Type
                   <select

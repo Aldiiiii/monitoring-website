@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Check, fetchChecks, fetchIncidents, fetchMonitors, Incident, Monitor } from '../lib/api';
+import { useAuth } from '../lib/useAuth';
 
 export default function HistoryPage() {
+  useAuth();
   const [selectedId, setSelectedId] = useState('');
 
   const monitorsQuery = useQuery({

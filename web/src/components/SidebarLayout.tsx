@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { clearToken } from '../lib/auth';
+import { useAuth } from '../lib/useAuth';
 
 type NavItem = {
   id: string;
@@ -8,17 +9,21 @@ type NavItem = {
   to: string;
 };
 
-const navItems: NavItem[] = [
-  { id: 'monitors', label: 'Monitors', description: 'List & manage monitors', to: '/' },
-  { id: 'reports', label: 'Reports', description: 'Uptime overview', to: '/reports' },
-  { id: 'history', label: 'History', description: 'Checks & incidents', to: '/history' },
-  { id: 'channels', label: 'Channels', description: 'Telegram settings', to: '/channels' },
-  { id: 'maintenance', label: 'Maintenance', description: 'Schedule downtime', to: '/maintenance' },
-  { id: 'users', label: 'Users', description: 'Admin user management', to: '/users' },
-];
-
 export default function SidebarLayout() {
   const navigate = useNavigate();
+  const { data: user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
+
+  const navItems: NavItem[] = [
+    { id: 'monitors', label: 'Monitors', description: 'List & manage monitors', to: '/' },
+    { id: 'reports', label: 'Reports', description: 'Uptime overview', to: '/reports' },
+    { id: 'history', label: 'History', description: 'Checks & incidents', to: '/history' },
+    { id: 'channels', label: 'Channels', description: 'Telegram settings', to: '/channels' },
+    { id: 'maintenance', label: 'Maintenance', description: 'Schedule downtime', to: '/maintenance' },
+    ...(isAdmin
+      ? [{ id: 'users', label: 'Users', description: 'Admin user management', to: '/users' }]
+      : []),
+  ];
 
   const handleLogout = () => {
     clearToken();

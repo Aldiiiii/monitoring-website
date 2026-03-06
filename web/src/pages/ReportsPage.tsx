@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchMonitors, fetchUptimeReport, Monitor } from '../lib/api';
 import UptimeChart from '../components/UptimeChart';
+import { useAuth } from '../lib/useAuth';
 
 export default function ReportsPage() {
+  useAuth();
   const [selectedId, setSelectedId] = useState('');
   const [days, setDays] = useState(7);
 

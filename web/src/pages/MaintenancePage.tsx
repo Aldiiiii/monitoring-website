@@ -11,9 +11,12 @@ import {
   Monitor,
   updateMaintenanceWindow,
 } from '../lib/api';
+import { useAuth } from '../lib/useAuth';
 
 export default function MaintenancePage() {
   const queryClient = useQueryClient();
+  const { data: user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [selectedId, setSelectedId] = useState('');
   const [editingWindow, setEditingWindow] = useState<MaintenanceWindow | null>(null);
   const [form, setForm] = useState<MaintenanceWindowInput>({
@@ -157,12 +160,18 @@ export default function MaintenancePage() {
         {selected && (
           <div style={{ marginTop: 16 }}>
             <h2>{selected.name}</h2>
+            {!isAdmin && (
+              <div className="empty">
+                Hanya admin yang bisa menambah atau mengubah maintenance.
+              </div>
+            )}
             <form onSubmit={handleSubmit}>
               <div className="form-grid">
                 <label>
                   Start
                   <input
                     type="datetime-local"
+                    disabled={!isAdmin}
                     value={form.startAt}
                     onChange={(event) =>
                       setForm((prev) => ({
@@ -177,6 +186,7 @@ export default function MaintenancePage() {
                   End
                   <input
                     type="datetime-local"
+                    disabled={!isAdmin}
                     value={form.endAt}
                     onChange={(event) =>
                       setForm((prev) => ({
@@ -190,6 +200,7 @@ export default function MaintenancePage() {
                 <label>
                   Note
                   <input
+                    disabled={!isAdmin}
                     value={form.note ?? ''}
                     onChange={(event) =>
                       setForm((prev) => ({
@@ -201,7 +212,7 @@ export default function MaintenancePage() {
                 </label>
               </div>
               <div className="footer-actions">
-                {editingWindow && (
+                {editingWindow && isAdmin && (
                   <button
                     type="button"
                     className="button secondary"
@@ -218,9 +229,11 @@ export default function MaintenancePage() {
                     Cancel Edit
                   </button>
                 )}
-                <button className="button" type="submit">
-                  {editingWindow ? 'Update' : 'Add'} Window
-                </button>
+                {isAdmin && (
+                  <button className="button" type="submit">
+                    {editingWindow ? 'Update' : 'Add'} Window
+                  </button>
+                )}
               </div>
             </form>
 
@@ -258,32 +271,34 @@ export default function MaintenancePage() {
                           <td>{formatDate(window.endAt)}</td>
                           <td>{window.note ?? '-'}</td>
                           <td>
-                            <div className="toolbar">
-                              <button
-                                className="button ghost"
-                                onClick={() => {
-                                  setEditingWindow(window);
-                                  setForm({
-                                    monitorId: window.monitorId,
-                                    startAt: toDatetimeLocal(window.startAt),
-                                    endAt: toDatetimeLocal(window.endAt),
-                                    note: window.note ?? '',
-                                  });
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="button secondary"
-                                onClick={() => {
-                                  if (confirm('Delete this window?')) {
-                                    deleteMutation.mutate(window.id);
-                                  }
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
+                            {isAdmin && (
+                              <div className="toolbar">
+                                <button
+                                  className="button ghost"
+                                  onClick={() => {
+                                    setEditingWindow(window);
+                                    setForm({
+                                      monitorId: window.monitorId,
+                                      startAt: toDatetimeLocal(window.startAt),
+                                      endAt: toDatetimeLocal(window.endAt),
+                                      note: window.note ?? '',
+                                    });
+                                  }}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="button secondary"
+                                  onClick={() => {
+                                    if (confirm('Delete this window?')) {
+                                      deleteMutation.mutate(window.id);
+                                    }
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))}

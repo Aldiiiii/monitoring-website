@@ -12,9 +12,12 @@ import {
   NotificationChannelInput,
   updateNotificationChannel,
 } from '../lib/api';
+import { useAuth } from '../lib/useAuth';
 
 export default function ChannelsPage() {
   const queryClient = useQueryClient();
+  const { data: user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [selectedId, setSelectedId] = useState('');
   const [editingChannel, setEditingChannel] =
     useState<NotificationChannel | null>(null);
@@ -142,11 +145,17 @@ export default function ChannelsPage() {
         {selected && (
           <div style={{ marginTop: 16 }}>
             <h2>{selected.name}</h2>
+            {!isAdmin && (
+              <div className="empty">
+                Hanya admin yang bisa menambah atau mengubah channel.
+              </div>
+            )}
             <form onSubmit={handleSubmit}>
               <div className="form-grid">
                 <label>
                   Type
                   <select
+                    disabled={!isAdmin}
                     value={channelForm.type}
                     onChange={(event) =>
                       setChannelForm((prev) => ({
@@ -161,6 +170,7 @@ export default function ChannelsPage() {
                 <label>
                   Enabled
                   <select
+                    disabled={!isAdmin}
                     value={channelForm.isEnabled ? 'true' : 'false'}
                     onChange={(event) =>
                       setChannelForm((prev) => ({
@@ -176,6 +186,7 @@ export default function ChannelsPage() {
                 <label>
                   Telegram Chat ID
                   <input
+                    disabled={!isAdmin}
                     value={channelForm.telegramChatId ?? ''}
                     onChange={(event) =>
                       setChannelForm((prev) => ({
@@ -190,6 +201,7 @@ export default function ChannelsPage() {
                   Telegram Thread ID
                   <input
                     type="number"
+                    disabled={!isAdmin}
                     value={channelForm.telegramThreadId ?? ''}
                     onChange={(event) =>
                       setChannelForm((prev) => ({
@@ -204,6 +216,7 @@ export default function ChannelsPage() {
                 <label>
                   Telegram Bot Token (optional)
                   <input
+                    disabled={!isAdmin}
                     value={channelForm.telegramBotToken ?? ''}
                     onChange={(event) =>
                       setChannelForm((prev) => ({
@@ -215,7 +228,7 @@ export default function ChannelsPage() {
                 </label>
               </div>
               <div className="footer-actions">
-                {editingChannel && (
+                {editingChannel && isAdmin && (
                   <button
                     type="button"
                     className="button secondary"
@@ -234,9 +247,11 @@ export default function ChannelsPage() {
                     Cancel Edit
                   </button>
                 )}
-                <button className="button" type="submit">
-                  {editingChannel ? 'Update' : 'Add'} Channel
-                </button>
+                {isAdmin && (
+                  <button className="button" type="submit">
+                    {editingChannel ? 'Update' : 'Add'} Channel
+                  </button>
+                )}
               </div>
             </form>
 
@@ -267,34 +282,36 @@ export default function ChannelsPage() {
                         <td className="mono">{channel.telegramChatId ?? '-'}</td>
                         <td>{channel.isEnabled ? 'Yes' : 'No'}</td>
                         <td>
-                          <div className="toolbar">
-                            <button
-                              className="button ghost"
-                              onClick={() => {
-                                setEditingChannel(channel);
-                                setChannelForm({
-                                  monitorId: channel.monitorId,
-                                  type: channel.type,
-                                  isEnabled: channel.isEnabled,
-                                  telegramChatId: channel.telegramChatId ?? '',
-                                  telegramThreadId: channel.telegramThreadId ?? undefined,
-                                  telegramBotToken: channel.telegramBotToken ?? '',
-                                });
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="button secondary"
-                              onClick={() => {
-                                if (confirm('Delete this channel?')) {
-                                  deleteChannelMutation.mutate(channel.id);
-                                }
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
+                          {isAdmin && (
+                            <div className="toolbar">
+                              <button
+                                className="button ghost"
+                                onClick={() => {
+                                  setEditingChannel(channel);
+                                  setChannelForm({
+                                    monitorId: channel.monitorId,
+                                    type: channel.type,
+                                    isEnabled: channel.isEnabled,
+                                    telegramChatId: channel.telegramChatId ?? '',
+                                    telegramThreadId: channel.telegramThreadId ?? undefined,
+                                    telegramBotToken: channel.telegramBotToken ?? '',
+                                  });
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="button secondary"
+                                onClick={() => {
+                                  if (confirm('Delete this channel?')) {
+                                    deleteChannelMutation.mutate(channel.id);
+                                  }
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -8,6 +8,7 @@ import {
   UpdateUserInput,
   User,
 } from '../lib/api';
+import { useAuth } from '../lib/useAuth';
 
 const emptyForm: UpdateUserInput = {
   name: '',
@@ -18,6 +19,8 @@ const emptyForm: UpdateUserInput = {
 
 export default function UsersPage() {
   const queryClient = useQueryClient();
+  const { data: authUser } = useAuth();
+  const isAdmin = authUser?.role === 'ADMIN';
   const [editing, setEditing] = useState<User | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<UpdateUserInput>(emptyForm);
@@ -112,13 +115,20 @@ export default function UsersPage() {
         <p>Manage user roles and deactivate accounts.</p>
       </header>
 
-      <div className="toolbar">
-        <button className="button" onClick={() => setShowCreate(true)}>
-          Add User
-        </button>
-      </div>
+      {!isAdmin && (
+        <div className="empty">Halaman ini hanya untuk admin.</div>
+      )}
 
-      <section className="card">
+      {isAdmin && (
+        <div className="toolbar">
+          <button className="button" onClick={() => setShowCreate(true)}>
+            Add User
+          </button>
+        </div>
+      )}
+
+      {isAdmin && (
+        <section className="card">
         {usersQuery.isLoading && <div className="empty">Loading users...</div>}
         {usersQuery.error && (
           <div className="empty">
@@ -169,9 +179,10 @@ export default function UsersPage() {
             </tbody>
           </table>
         )}
-      </section>
+        </section>
+      )}
 
-      {editing && (
+      {editing && isAdmin && (
         <div className="modal-backdrop" onClick={() => setEditing(null)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <h2>Edit User</h2>
@@ -240,7 +251,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {showCreate && (
+      {showCreate && isAdmin && (
         <div className="modal-backdrop" onClick={() => setShowCreate(false)}>
           <div className="modal" onClick={(event) => event.stopPropagation()}>
             <h2>Create User</h2>
