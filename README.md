@@ -49,22 +49,31 @@ npm run start:dev
 ```
 
 ## API Endpoints
-Base URL: `http://localhost:3000`
+Base URL: `http://localhost:3000/api`
 
 ### Monitors
-- `GET /monitors`
-- `GET /monitors/:id`
-- `POST /monitors`
-- `PATCH /monitors/:id`
-- `DELETE /monitors/:id`
+- `GET /api/monitors`
+- `GET /api/monitors/:id`
+- `POST /api/monitors`
+- `PATCH /api/monitors/:id`
+- `DELETE /api/monitors/:id`
 
 ### Checks
-- `GET /checks`
-- `GET /checks/:id`
+- `GET /api/checks`
+- `GET /api/checks/:id`
 
 ### Incidents
-- `GET /incidents`
-- `GET /incidents/:id`
+- `GET /api/incidents`
+- `GET /api/incidents/:id`
+
+### Health
+- `GET /api/health` → `{ status: 'ok', timestamp: ISO8601 }`
+
+### Auth
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/auth/google` + `/api/auth/google/callback`
 
 ## Notes
 - This repo currently contains backend scaffolding only.

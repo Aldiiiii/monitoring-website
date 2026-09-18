@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, Monitor } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { handlePrismaError } from '../common/prisma-error.util';
@@ -8,11 +8,12 @@ import { UpdateMonitorDto } from './dto/update-monitor.dto';
 
 @Injectable()
 export class MonitorsService {
+  private readonly logger = new Logger(MonitorsService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateMonitorDto): Promise<Monitor> {
     try {
-      return await this.prisma.monitor.create({
+      const monitor = await this.prisma.monitor.create({
         data: {
           userId,
           name: dto.name,
@@ -30,6 +31,8 @@ export class MonitorsService {
           isActive: dto.isActive ?? true,
         },
       });
+      this.logger.log(`AUDIT create monitor ${monitor.id} by user ${userId} name=${dto.name} type=${dto.type}`);
+      return monitor;
     } catch (error) {
       // Normalize Prisma errors to HTTP exceptions.
       handlePrismaError(error);
@@ -76,7 +79,7 @@ export class MonitorsService {
         throw new NotFoundException('Monitor not found.');
       }
 
-      return await this.prisma.monitor.update({
+      const updated = await this.prisma.monitor.update({
         where: { id },
         data: {
           name: dto.name,
@@ -94,6 +97,8 @@ export class MonitorsService {
           isActive: dto.isActive ?? undefined,
         },
       });
+      this.logger.log(`AUDIT update monitor ${id} by user ${userId} dto=${JSON.stringify(dto)}`);
+      return updated;
     } catch (error) {
       // Normalize Prisma errors to HTTP exceptions.
       handlePrismaError(error);
@@ -110,6 +115,7 @@ export class MonitorsService {
         throw new NotFoundException('Monitor not found.');
       }
       await this.prisma.monitor.delete({ where: { id } });
+      this.logger.log(`AUDIT delete monitor ${id} by user ${userId}`);
     } catch (error) {
       // Normalize Prisma errors to HTTP exceptions.
       handlePrismaError(error);

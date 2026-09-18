@@ -5,6 +5,7 @@ import {
   createUser,
   deactivateUser,
   fetchUsers,
+  updateUser,
   UpdateUserInput,
   User,
 } from '../lib/api';

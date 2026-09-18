@@ -3,9 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, fetchChecks, fetchIncidents, fetchMonitors, Incident, Monitor } from '../lib/api';
 import { useAuth } from '../lib/useAuth';
 
+const PAGE_SIZE = 50;
+
 export default function HistoryPage() {
   useAuth();
   const [selectedId, setSelectedId] = useState('');
+  const [checksPage, setChecksPage] = useState(0);
+  const [incidentsPage, setIncidentsPage] = useState(0);
 
   const monitorsQuery = useQuery({
     queryKey: ['monitors'],
@@ -18,15 +22,20 @@ export default function HistoryPage() {
     }
   }, [selectedId, monitorsQuery.data]);
 
-  const checksQuery = useQuery<Check[]>({
-    queryKey: ['checks', selectedId],
-    queryFn: () => fetchChecks(selectedId),
+  useEffect(() => {
+    setChecksPage(0);
+    setIncidentsPage(0);
+  }, [selectedId]);
+
+  const checksQuery = useQuery({
+    queryKey: ['checks', selectedId, checksPage],
+    queryFn: () => fetchChecks(selectedId, checksPage * PAGE_SIZE, PAGE_SIZE),
     enabled: Boolean(selectedId),
   });
 
-  const incidentsQuery = useQuery<Incident[]>({
-    queryKey: ['incidents', selectedId],
-    queryFn: () => fetchIncidents(selectedId),
+  const incidentsQuery = useQuery({
+    queryKey: ['incidents', selectedId, incidentsPage],
+    queryFn: () => fetchIncidents(selectedId, incidentsPage * PAGE_SIZE, PAGE_SIZE),
     enabled: Boolean(selectedId),
   });
 
@@ -34,6 +43,16 @@ export default function HistoryPage() {
   const selected = monitors.find((monitor) => monitor.id === selectedId) as
     | Monitor
     | undefined;
+
+  const checksData = checksQuery.data;
+  const checks = checksData?.data ?? [];
+  const checksTotal = checksData?.total ?? 0;
+  const checksTotalPages = Math.max(1, Math.ceil(checksTotal / PAGE_SIZE));
+
+  const incidentsData = incidentsQuery.data;
+  const incidents = incidentsData?.data ?? [];
+  const incidentsTotal = incidentsData?.total ?? 0;
+  const incidentsTotalPages = Math.max(1, Math.ceil(incidentsTotal / PAGE_SIZE));
 
   const formatDate = (value?: string | null) => {
     if (!value) return '-';
@@ -87,30 +106,56 @@ export default function HistoryPage() {
                   {(checksQuery.error as Error).message || 'Failed to load checks'}
                 </div>
               )}
-              {!checksQuery.isLoading && (checksQuery.data?.length ?? 0) === 0 && (
+              {!checksQuery.isLoading && checks.length === 0 && (
                 <div className="empty">No checks yet.</div>
               )}
-              {(checksQuery.data?.length ?? 0) > 0 && (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Status</th>
-                      <th>Latency</th>
-                      <th>Error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(checksQuery.data ?? []).map((check) => (
-                      <tr key={check.id}>
-                        <td>{formatDate(check.checkedAt)}</td>
-                        <td>{check.status}</td>
-                        <td>{check.latencyMs ? `${check.latencyMs} ms` : '-'}</td>
-                        <td className="mono">{check.error ?? '-'}</td>
+              {checks.length > 0 && (
+                <>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Latency</th>
+                        <th>Error</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {checks.map((check) => (
+                        <tr key={check.id}>
+                          <td>{formatDate(check.checkedAt)}</td>
+                          <td>{check.status}</td>
+                          <td>{check.latencyMs ? `${check.latencyMs} ms` : '-'}</td>
+                          <td className="mono">{check.error ?? '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="pagination">
+                    <span className="pagination-info">
+                      {checksTotal} result{checksTotal !== 1 ? 's' : ''}
+                    </span>
+                    <div className="pagination-controls">
+                      <button
+                        className="pagination-btn"
+                        disabled={checksPage === 0}
+                        onClick={() => setChecksPage((p) => p - 1)}
+                      >
+                        Prev
+                      </button>
+                      <span className="pagination-page">
+                        {checksPage + 1} / {checksTotalPages}
+                      </span>
+                      <button
+                        className="pagination-btn"
+                        disabled={checksPage >= checksTotalPages - 1}
+                        onClick={() => setChecksPage((p) => p + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -122,34 +167,60 @@ export default function HistoryPage() {
                   {(incidentsQuery.error as Error).message || 'Failed to load incidents'}
                 </div>
               )}
-              {!incidentsQuery.isLoading && (incidentsQuery.data?.length ?? 0) === 0 && (
+              {!incidentsQuery.isLoading && incidents.length === 0 && (
                 <div className="empty">No incidents yet.</div>
               )}
-              {(incidentsQuery.data?.length ?? 0) > 0 && (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Duration</th>
-                      <th>Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(incidentsQuery.data ?? []).map((incident) => (
-                      <tr key={incident.id}>
-                        <td>{formatDate(incident.startedAt)}</td>
-                        <td>{formatDate(incident.endedAt ?? undefined)}</td>
-                        <td>
-                          {incident.durationSec
-                            ? `${Math.round(incident.durationSec / 60)} min`
-                            : '-'}
-                        </td>
-                        <td className="mono">{incident.reason ?? '-'}</td>
+              {incidents.length > 0 && (
+                <>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Duration</th>
+                        <th>Reason</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {incidents.map((incident) => (
+                        <tr key={incident.id}>
+                          <td>{formatDate(incident.startedAt)}</td>
+                          <td>{formatDate(incident.endedAt ?? undefined)}</td>
+                          <td>
+                            {incident.durationSec
+                              ? `${Math.round(incident.durationSec / 60)} min`
+                              : '-'}
+                          </td>
+                          <td className="mono">{incident.reason ?? '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="pagination">
+                    <span className="pagination-info">
+                      {incidentsTotal} result{incidentsTotal !== 1 ? 's' : ''}
+                    </span>
+                    <div className="pagination-controls">
+                      <button
+                        className="pagination-btn"
+                        disabled={incidentsPage === 0}
+                        onClick={() => setIncidentsPage((p) => p - 1)}
+                      >
+                        Prev
+                      </button>
+                      <span className="pagination-page">
+                        {incidentsPage + 1} / {incidentsTotalPages}
+                      </span>
+                      <button
+                        className="pagination-btn"
+                        disabled={incidentsPage >= incidentsTotalPages - 1}
+                        onClick={() => setIncidentsPage((p) => p + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>

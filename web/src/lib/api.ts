@@ -13,6 +13,13 @@ export type Monitor = {
   lastStatus: MonitorStatus;
   lastCheckedAt?: string | null;
   lastLatencyMs?: number | null;
+  method?: string | null;
+  keyword?: string | null;
+  expectCode?: number | null;
+  intervalSec: number;
+  timeoutMs: number;
+  retries: number;
+  retryDelayMs: number;
 };
 
 export type MonitorInput = {
@@ -81,6 +88,24 @@ export type UptimeReport = {
   upChecks: number;
   uptimePercent: number;
   series: UptimeSeriesPoint[];
+  incidentCount?: number;
+  totalDowntimeSec?: number;
+  totalDowntimeMin?: number;
+  avgLatencyMs?: number | null;
+};
+
+export type LatencyPoint = {
+  date: string;
+  avgLatencyMs: number | null;
+  count: number;
+};
+
+export type LatencyReport = {
+  monitorId: string;
+  days: number;
+  avgLatencyMs: number | null;
+  p95LatencyMs: number | null;
+  series: LatencyPoint[];
 };
 
 export type CheckStatus = 'UP' | 'DOWN';
@@ -112,6 +137,8 @@ export type User = {
   email: string;
   role: UserRole;
   isActive: boolean;
+  googleId?: string | null;
+  avatar?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -138,7 +165,7 @@ export type CreateUserInput = {
 
 import { getToken } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -153,11 +180,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || 'Request failed');
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text);
+      const msg = json?.error?.message ?? json?.message ?? text;
+      const details = json?.error?.details ? `: ${JSON.stringify(json.error.details)}` : '';
+      throw new Error(msg + details || 'Request failed');
+    } catch (e) {
+      if (e instanceof Error && e.message !== text) throw e;
+      throw new Error(text || 'Request failed');
+    }
   }
 
-  return response.json() as Promise<T>;
+  const json = (await response.json()) as any;
+  // Unwrap PRD 12.5 {data, meta} if present, else return raw (backward compat)
+  if (json && typeof json === 'object' && 'data' in json && 'meta' in json && Object.keys(json).length === 2) {
+    return json.data as T;
+  }
+  return json as T;
 }
 
 export function fetchMonitors(): Promise<Monitor[]> {
@@ -247,14 +287,40 @@ export function fetchUptimeReport(monitorId: string, days: number): Promise<Upti
   return request<UptimeReport>(`/reports/uptime?${query.toString()}`);
 }
 
-export function fetchChecks(monitorId: string): Promise<Check[]> {
-  const query = new URLSearchParams({ monitorId, take: '50' });
-  return request<Check[]>(`/checks?${query.toString()}`);
+export function fetchLatencyReport(monitorId: string, days: number): Promise<LatencyReport> {
+  const query = new URLSearchParams({ monitorId, days: String(days) });
+  return request<LatencyReport>(`/reports/latency?${query.toString()}`);
 }
 
-export function fetchIncidents(monitorId: string): Promise<Incident[]> {
-  const query = new URLSearchParams({ monitorId, take: '50' });
-  return request<Incident[]>(`/incidents?${query.toString()}`);
+export type PaginatedResult<T> = {
+  data: T[];
+  total: number;
+};
+
+export function fetchChecks(
+  monitorId: string,
+  skip = 0,
+  take = 50,
+): Promise<PaginatedResult<Check>> {
+  const query = new URLSearchParams({
+    monitorId,
+    skip: String(skip),
+    take: String(take),
+  });
+  return request<PaginatedResult<Check>>(`/checks?${query.toString()}`);
+}
+
+export function fetchIncidents(
+  monitorId: string,
+  skip = 0,
+  take = 50,
+): Promise<PaginatedResult<Incident>> {
+  const query = new URLSearchParams({
+    monitorId,
+    skip: String(skip),
+    take: String(take),
+  });
+  return request<PaginatedResult<Incident>>(`/incidents?${query.toString()}`);
 }
 
 export function fetchUsers(): Promise<User[]> {

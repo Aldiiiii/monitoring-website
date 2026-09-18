@@ -39,7 +39,9 @@ model User {
   id        String    @id @default(cuid())
   name      String
   email     String    @unique
-  password  String
+  password  String?   // nullable for OAuth users
+  googleId  String?   @unique // Google OAuth ID
+  avatar    String?   // Google profile picture
   isActive  Boolean   @default(true)
   role      UserRole  @default(ADMIN)
 
@@ -50,6 +52,7 @@ model User {
 
   @@index([isActive])
   @@index([role])
+  @@index([googleId])
 }
 
 model Monitor {

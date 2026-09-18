@@ -68,11 +68,17 @@ export class ChecksService {
       );
 
       for (const monitor of activeMonitors) {
-        if (maintenanceIds.has(monitor.id)) {
-          continue;
+        const isInMaintenance = maintenanceIds.has(monitor.id);
+        // Respect per-monitor intervalSec (PRD 5.1: 60-300s). Skip if last check too recent.
+        if (monitor.lastCheckedAt) {
+          const elapsedMs = now.getTime() - new Date(monitor.lastCheckedAt).getTime();
+          const intervalMs = (monitor.intervalSec ?? 60) * 1000;
+          if (elapsedMs < intervalMs) {
+            continue;
+          }
         }
-        // Run check per monitor (HTTP or TCP).
-        await this.runCheckForMonitor(monitor);
+        // Always run check and store result; suppress notification only if in maintenance (PRD 12.3)
+        await this.runCheckForMonitor(monitor, isInMaintenance);
       }
     } catch (error) {
       this.logger.error('Scheduled check failed.', error as Error);
@@ -81,7 +87,10 @@ export class ChecksService {
     }
   }
 
-  async findAll(userId: string, query: ListChecksDto): Promise<Check[]> {
+  async findAll(
+    userId: string,
+    query: ListChecksDto,
+  ): Promise<{ data: Check[]; total: number }> {
     const where: Prisma.CheckWhereInput = {
       monitorId: query.monitorId,
       status: query.status,
@@ -95,12 +104,17 @@ export class ChecksService {
           : undefined,
     };
 
-    return this.prisma.check.findMany({
-      where,
-      orderBy: { checkedAt: 'desc' },
-      skip: query.skip,
-      take: query.take ?? 100,
-    });
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.check.findMany({
+        where,
+        orderBy: { checkedAt: 'desc' },
+        skip: query.skip,
+        take: query.take ?? 100,
+      }),
+      this.prisma.check.count({ where }),
+    ]);
+
+    return { data, total };
   }
 
   async findOne(userId: string, id: string): Promise<Check> {
@@ -114,7 +128,7 @@ export class ChecksService {
     return check;
   }
 
-  private async runCheckForMonitor(monitor: Monitor): Promise<void> {
+  private async runCheckForMonitor(monitor: Monitor, suppressNotification = false): Promise<void> {
     // Apply retry logic and return the final check result.
     const result = await this.performCheckWithRetries(monitor);
     const checkedAt = new Date();
@@ -182,7 +196,9 @@ export class ChecksService {
       }
     });
 
-    await this.notifyTelegram(monitor, previousStatus, nextStatus);
+    if (!suppressNotification) {
+      await this.notifyTelegram(monitor, previousStatus, nextStatus);
+    }
   }
 
   private async performCheckWithRetries(monitor: Monitor): Promise<CheckResult> {
@@ -218,7 +234,7 @@ export class ChecksService {
     );
   }
 
-  private async checkHttp(monitor: Monitor): Promise<CheckResult> {
+  private async checkHttp(monitor: Monitor, redirectCount = 0, startTime?: number): Promise<CheckResult> {
     if (!monitor.url) {
       return {
         status: CheckStatus.DOWN,
@@ -228,9 +244,10 @@ export class ChecksService {
       };
     }
 
+    const urlStr = monitor.url;
     let url: URL;
     try {
-      url = new URL(monitor.url);
+      url = new URL(urlStr);
     } catch {
       return {
         status: CheckStatus.DOWN,
@@ -242,10 +259,11 @@ export class ChecksService {
 
     const method = monitor.method ?? 'GET';
     const timeoutMs = monitor.timeoutMs;
+    const start = startTime ?? Date.now();
 
     return new Promise<CheckResult>((resolve) => {
-      const start = Date.now();
       const client = url.protocol === 'https:' ? https : http;
+      const isHttps = url.protocol === 'https:';
       const req = client.request(
         {
           hostname: url.hostname,
@@ -253,9 +271,33 @@ export class ChecksService {
           path: `${url.pathname}${url.search}`,
           method,
           timeout: timeoutMs,
-        },
+          // TLS validation on (reject invalid/expired) per PRD 12.2
+          ...(isHttps ? { rejectUnauthorized: true } : {}),
+        } as any,
         (res) => {
           const statusCode = res.statusCode ?? null;
+
+          // Follow redirects up to 5 (PRD 12.2)
+          const location = res.headers?.location as string | undefined;
+          const isRedirect = statusCode !== null && [301, 302, 303, 307, 308].includes(statusCode);
+          if (isRedirect && location && redirectCount < 5) {
+            res.resume(); // drain
+            try {
+              const nextUrl = new URL(location, url).toString();
+              const nextMonitor = { ...monitor, url: nextUrl } as Monitor;
+              this.checkHttp(nextMonitor, redirectCount + 1, start).then(resolve);
+            } catch {
+              const latencyMs = Date.now() - start;
+              resolve({
+                status: CheckStatus.DOWN,
+                latencyMs,
+                statusCode,
+                error: 'invalid_redirect_url',
+              });
+            }
+            return;
+          }
+
           const limit = 1_000_000;
           let body = '';
 

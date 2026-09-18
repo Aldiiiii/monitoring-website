@@ -20,4 +20,16 @@ export class ReportsController {
       query.days ?? 7,
     );
   }
+
+  @Get('latency')
+  getLatency(
+    @CurrentUser() user: { id: string } | null,
+    @Query() query: UptimeReportDto,
+  ) {
+    return this.reportsService.getLatencyReport(
+      user?.id ?? '',
+      query.monitorId,
+      query.days ?? 7,
+    );
+  }
 }

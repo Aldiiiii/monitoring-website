@@ -41,6 +41,7 @@ export class UpdateMonitorDto {
 
   @IsOptional()
   @IsString()
+  @IsEnum(['GET', 'HEAD'] as any, { message: 'method must be GET or HEAD' })
   method?: string;
 
   @IsOptional()
@@ -57,7 +58,8 @@ export class UpdateMonitorDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(30)
+  @Min(60)
+  @Max(300)
   intervalSec?: number;
 
   @IsOptional()

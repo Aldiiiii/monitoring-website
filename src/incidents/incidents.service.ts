@@ -7,7 +7,10 @@ import { ListIncidentsDto } from './dto/list-incidents.dto';
 export class IncidentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(userId: string, query: ListIncidentsDto): Promise<Incident[]> {
+  async findAll(
+    userId: string,
+    query: ListIncidentsDto,
+  ): Promise<{ data: Incident[]; total: number }> {
     const where: Prisma.IncidentWhereInput = {
       monitorId: query.monitorId,
       monitor: { userId },
@@ -20,12 +23,17 @@ export class IncidentsService {
           : undefined,
     };
 
-    return this.prisma.incident.findMany({
-      where,
-      orderBy: { startedAt: 'desc' },
-      skip: query.skip,
-      take: query.take ?? 100,
-    });
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.incident.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        skip: query.skip,
+        take: query.take ?? 100,
+      }),
+      this.prisma.incident.count({ where }),
+    ]);
+
+    return { data, total };
   }
 
   async findOne(userId: string, id: string): Promise<Incident> {

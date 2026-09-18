@@ -12,6 +12,15 @@ type TelegramMessageParams = {
 export class TelegramService {
   private readonly logger = new Logger(TelegramService.name);
 
+  // Cooldown dedup per monitorId+status (PRD 12.3: 5 menit)
+  private readonly cooldownMs = 5 * 60 * 1000;
+  private readonly lastSentAt = new Map<string, number>();
+
+  private getDedupKey(chatId: string, text: string): string {
+    // Key by chatId + first line of text (contains monitor name + status)
+    return `${chatId}:${text.split('\n')[0]}`;
+  }
+
   async sendMessage({
     chatId,
     text,
@@ -29,13 +38,38 @@ export class TelegramService {
       return;
     }
 
+    // Dedup: skip if same message sent within cooldown window
+    const dedupKey = this.getDedupKey(chatId, text);
+    const lastAt = this.lastSentAt.get(dedupKey);
+    if (lastAt && Date.now() - lastAt < this.cooldownMs) {
+      this.logger.log(`Telegram dedup skip for ${dedupKey}`);
+      return;
+    }
+
     const payload = JSON.stringify({
       chat_id: chatId,
       text,
       message_thread_id: threadId ?? undefined,
     });
 
-    await new Promise<void>((resolve) => {
+    const maxRetries = 3;
+    const timeoutMs = 8000;
+
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      const success = await this.attemptSend(botToken, payload, timeoutMs);
+      if (success) {
+        this.lastSentAt.set(dedupKey, Date.now());
+        return;
+      }
+      if (attempt < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+    this.logger.warn(`Telegram send failed after ${maxRetries} attempts for ${chatId}`);
+  }
+
+  private attemptSend(botToken: string, payload: string, timeoutMs: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
       const request = https.request(
         {
           hostname: 'api.telegram.org',
@@ -48,16 +82,22 @@ export class TelegramService {
         },
         (response) => {
           response.resume();
-          if (response.statusCode && response.statusCode >= 400) {
+          if (response.statusCode && response.statusCode >= 200 && response.statusCode < 300) {
+            resolve(true);
+          } else {
             this.logger.warn(`Telegram send failed with ${response.statusCode}.`);
+            resolve(false);
           }
-          resolve();
         },
       );
 
+      request.setTimeout(timeoutMs, () => {
+        request.destroy(new Error('timeout'));
+      });
+
       request.on('error', (error) => {
         this.logger.warn(`Telegram send error: ${error.message}`);
-        resolve();
+        resolve(false);
       });
 
       request.write(payload);

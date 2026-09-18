@@ -14,8 +14,6 @@ import {
   fetchMaintenanceWindows,
   fetchMonitors,
   fetchNotificationChannels,
-  Check,
-  Incident,
   MaintenanceWindow,
   MaintenanceWindowInput,
   Monitor,
@@ -47,6 +45,8 @@ const emptyForm: MonitorInput = {
   retries: 2,
   retryDelayMs: 500,
 };
+
+const PAGE_SIZE = 50;
 
 export default function MonitorsPage() {
   const queryClient = useQueryClient();
@@ -84,6 +84,8 @@ export default function MonitorsPage() {
   const [reportFor, setReportFor] = useState<Monitor | null>(null);
   const [reportDays, setReportDays] = useState(7);
   const [historyFor, setHistoryFor] = useState<Monitor | null>(null);
+  const [historyChecksPage, setHistoryChecksPage] = useState(0);
+  const [historyIncidentsPage, setHistoryIncidentsPage] = useState(0);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['monitors'],
@@ -111,17 +113,21 @@ export default function MonitorsPage() {
     enabled: Boolean(reportFor),
   });
 
-  const checksQuery = useQuery<Check[]>({
-    queryKey: ['checks', historyFor?.id],
+  const checksQuery = useQuery({
+    queryKey: ['checks', historyFor?.id, historyChecksPage],
     queryFn: () =>
-      historyFor ? fetchChecks(historyFor.id) : Promise.resolve([]),
+      historyFor
+        ? fetchChecks(historyFor.id, historyChecksPage * PAGE_SIZE, PAGE_SIZE)
+        : Promise.resolve({ data: [], total: 0 }),
     enabled: Boolean(historyFor),
   });
 
-  const incidentsQuery = useQuery<Incident[]>({
-    queryKey: ['incidents', historyFor?.id],
+  const incidentsQuery = useQuery({
+    queryKey: ['incidents', historyFor?.id, historyIncidentsPage],
     queryFn: () =>
-      historyFor ? fetchIncidents(historyFor.id) : Promise.resolve([]),
+      historyFor
+        ? fetchIncidents(historyFor.id, historyIncidentsPage * PAGE_SIZE, PAGE_SIZE)
+        : Promise.resolve({ data: [], total: 0 }),
     enabled: Boolean(historyFor),
   });
 
@@ -306,6 +312,8 @@ export default function MonitorsPage() {
 
   const openHistory = (monitor: Monitor) => {
     setHistoryFor(monitor);
+    setHistoryChecksPage(0);
+    setHistoryIncidentsPage(0);
     setShowHistory(true);
   };
 
@@ -1113,12 +1121,11 @@ export default function MonitorsPage() {
               )}
               {!checksQuery.isLoading &&
                 !checksQuery.error &&
-                (checksQuery.data?.length ?? 0) === 0 && (
+                (checksQuery.data?.data.length ?? 0) === 0 && (
                   <div className="empty">No checks yet.</div>
                 )}
-              {!checksQuery.isLoading &&
-                !checksQuery.error &&
-                (checksQuery.data?.length ?? 0) > 0 && (
+              {(checksQuery.data?.data.length ?? 0) > 0 && (
+                <>
                   <table className="table">
                     <thead>
                       <tr>
@@ -1129,7 +1136,7 @@ export default function MonitorsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(checksQuery.data ?? []).map((check) => (
+                      {(checksQuery.data?.data ?? []).map((check) => (
                         <tr key={check.id}>
                           <td>{formatDate(check.checkedAt)}</td>
                           <td>{check.status}</td>
@@ -1139,7 +1146,32 @@ export default function MonitorsPage() {
                       ))}
                     </tbody>
                   </table>
-                )}
+                  <div className="pagination">
+                    <span className="pagination-info">
+                      {checksQuery.data?.total ?? 0} result{(checksQuery.data?.total ?? 0) !== 1 ? 's' : ''}
+                    </span>
+                    <div className="pagination-controls">
+                      <button
+                        className="pagination-btn"
+                        disabled={historyChecksPage === 0}
+                        onClick={() => setHistoryChecksPage((p) => p - 1)}
+                      >
+                        Prev
+                      </button>
+                      <span className="pagination-page">
+                        {historyChecksPage + 1} / {Math.max(1, Math.ceil((checksQuery.data?.total ?? 0) / PAGE_SIZE))}
+                      </span>
+                      <button
+                        className="pagination-btn"
+                        disabled={historyChecksPage >= Math.ceil((checksQuery.data?.total ?? 0) / PAGE_SIZE) - 1}
+                        onClick={() => setHistoryChecksPage((p) => p + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{ marginTop: 18 }}>
@@ -1152,12 +1184,11 @@ export default function MonitorsPage() {
               )}
               {!incidentsQuery.isLoading &&
                 !incidentsQuery.error &&
-                (incidentsQuery.data?.length ?? 0) === 0 && (
+                (incidentsQuery.data?.data.length ?? 0) === 0 && (
                   <div className="empty">No incidents yet.</div>
                 )}
-              {!incidentsQuery.isLoading &&
-                !incidentsQuery.error &&
-                (incidentsQuery.data?.length ?? 0) > 0 && (
+              {(incidentsQuery.data?.data.length ?? 0) > 0 && (
+                <>
                   <table className="table">
                     <thead>
                       <tr>
@@ -1168,7 +1199,7 @@ export default function MonitorsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(incidentsQuery.data ?? []).map((incident) => (
+                      {(incidentsQuery.data?.data ?? []).map((incident) => (
                         <tr key={incident.id}>
                           <td>{formatDate(incident.startedAt)}</td>
                           <td>{formatDate(incident.endedAt ?? undefined)}</td>
@@ -1182,7 +1213,32 @@ export default function MonitorsPage() {
                       ))}
                     </tbody>
                   </table>
-                )}
+                  <div className="pagination">
+                    <span className="pagination-info">
+                      {incidentsQuery.data?.total ?? 0} result{(incidentsQuery.data?.total ?? 0) !== 1 ? 's' : ''}
+                    </span>
+                    <div className="pagination-controls">
+                      <button
+                        className="pagination-btn"
+                        disabled={historyIncidentsPage === 0}
+                        onClick={() => setHistoryIncidentsPage((p) => p - 1)}
+                      >
+                        Prev
+                      </button>
+                      <span className="pagination-page">
+                        {historyIncidentsPage + 1} / {Math.max(1, Math.ceil((incidentsQuery.data?.total ?? 0) / PAGE_SIZE))}
+                      </span>
+                      <button
+                        className="pagination-btn"
+                        disabled={historyIncidentsPage >= Math.ceil((incidentsQuery.data?.total ?? 0) / PAGE_SIZE) - 1}
+                        onClick={() => setHistoryIncidentsPage((p) => p + 1)}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
