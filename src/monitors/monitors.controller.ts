@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { MonitorsService } from './monitors.service';
 import { CreateMonitorDto } from './dto/create-monitor.dto';
 import { ListMonitorsDto } from './dto/list-monitors.dto';
@@ -24,7 +25,7 @@ export class MonitorsController {
   constructor(private readonly monitorsService: MonitorsService) {}
 
   @Post()
-  // Create a new monitor.
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   @Roles('ADMIN')
   create(@CurrentUser() user: { id: string } | null, @Body() dto: CreateMonitorDto) {
     return this.monitorsService.create(user?.id ?? '', dto);
@@ -43,7 +44,7 @@ export class MonitorsController {
   }
 
   @Patch(':id')
-  // Update a monitor by id.
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   @Roles('ADMIN')
   update(
     @CurrentUser() user: { id: string } | null,
@@ -54,7 +55,7 @@ export class MonitorsController {
   }
 
   @Delete(':id')
-  // Delete a monitor by id.
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   @Roles('ADMIN')
   remove(@CurrentUser() user: { id: string } | null, @Param('id') id: string) {
     return this.monitorsService.remove(user?.id ?? '', id);

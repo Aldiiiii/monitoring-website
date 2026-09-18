@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -26,6 +27,7 @@ export class MaintenanceWindowsController {
   ) {}
 
   @Post()
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   @Roles('ADMIN')
   create(
     @CurrentUser() user: { id: string } | null,
@@ -51,6 +53,7 @@ export class MaintenanceWindowsController {
   }
 
   @Patch(':id')
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   @Roles('ADMIN')
   update(
     @CurrentUser() user: { id: string } | null,
@@ -61,6 +64,7 @@ export class MaintenanceWindowsController {
   }
 
   @Delete(':id')
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   @Roles('ADMIN')
   remove(@CurrentUser() user: { id: string } | null, @Param('id') id: string) {
     return this.maintenanceWindowsService.remove(user?.id ?? '', id);

@@ -181,19 +181,22 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text();
+    let msg: string;
     try {
       const json = JSON.parse(text);
-      const msg = json?.error?.message ?? json?.message ?? text;
+      msg = json?.error?.message ?? json?.message ?? text;
       const details = json?.error?.details ? `: ${JSON.stringify(json.error.details)}` : '';
-      throw new Error(msg + details || 'Request failed');
-    } catch (e) {
-      if (e instanceof Error && e.message !== text) throw e;
-      throw new Error(text || 'Request failed');
+      msg = msg + details || 'Request failed';
+    } catch {
+      msg = text || 'Request failed';
     }
+
+    const err = new Error(msg);
+    (err as any).status = response.status;
+    throw err;
   }
 
   const json = (await response.json()) as any;
-  // Unwrap PRD 12.5 {data, meta} if present, else return raw (backward compat)
   if (json && typeof json === 'object' && 'data' in json && 'meta' in json && Object.keys(json).length === 2) {
     return json.data as T;
   }

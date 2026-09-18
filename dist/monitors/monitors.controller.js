@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MonitorsController = void 0;
 const common_1 = require("@nestjs/common");
+const throttler_1 = require("@nestjs/throttler");
 const monitors_service_1 = require("./monitors.service");
 const create_monitor_dto_1 = require("./dto/create-monitor.dto");
 const list_monitors_dto_1 = require("./dto/list-monitors.dto");
@@ -45,6 +46,7 @@ let MonitorsController = class MonitorsController {
 exports.MonitorsController = MonitorsController;
 __decorate([
     (0, common_1.Post)(),
+    (0, throttler_1.Throttle)({ write: { limit: 30, ttl: 60000 } }),
     (0, roles_decorator_1.Roles)('ADMIN'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
@@ -70,6 +72,7 @@ __decorate([
 ], MonitorsController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Patch)(':id'),
+    (0, throttler_1.Throttle)({ write: { limit: 30, ttl: 60000 } }),
     (0, roles_decorator_1.Roles)('ADMIN'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id')),
@@ -80,6 +83,7 @@ __decorate([
 ], MonitorsController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
+    (0, throttler_1.Throttle)({ write: { limit: 30, ttl: 60000 } }),
     (0, roles_decorator_1.Roles)('ADMIN'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id')),

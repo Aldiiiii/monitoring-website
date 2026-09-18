@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Patch, Query, UseGuards, Body, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -19,6 +20,7 @@ export class UsersController {
   }
 
   @Post()
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
@@ -29,11 +31,13 @@ export class UsersController {
   }
 
   @Patch(':id')
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }
 
   @Patch(':id/deactivate')
+  @Throttle({ write: { limit: 30, ttl: 60000 } })
   deactivate(@Param('id') id: string) {
     return this.usersService.deactivate(id);
   }

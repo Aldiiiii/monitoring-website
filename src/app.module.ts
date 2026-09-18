@@ -18,15 +18,21 @@ import { HealthModule } from './health/health.module';
   imports: [
     ThrottlerModule.forRoot([
       {
-        // Global: 60 requests per minute per IP
+        // Global: 300 requests per minute per IP (dashboard reads)
         ttl: 60000,
-        limit: 60,
+        limit: 300,
       },
       {
-        // Auth burst: 5 requests per 60s (used via @Throttle on auth endpoints)
+        // Auth burst: 5 requests per 60s (login/register)
         name: 'auth',
         ttl: 60000,
         limit: 5,
+      },
+      {
+        // Write endpoints: 30 requests per 60s (POST/PATCH/DELETE)
+        name: 'write',
+        ttl: 60000,
+        limit: 30,
       },
     ]),
     ScheduleModule.forRoot(),
